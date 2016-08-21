@@ -10,141 +10,18 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui.hpp>
 #include <stdint.h>
+#include <time.h> 
+#include "RandomGenerator.h"
+#include "ImagePacket.h"
 
 namespace MC=Euresys::MultiCam;
 
-#define SAVE_BITMAP_SEQ 0
-
-class SerializeHelper{
-public:
-	SerializeHelper(void * outBuffer) 
-		:outBuffer((uint8_t*)outBuffer){
-
-	}
-
-	//template <typename T>
-	//void load(const T& data){
-	//	memcpy(outBuffer, &data, sizeof(T));
-	//	outBuffer += sizeof(T);
-	//}
-
-	void load(const uint32_t& data){
-		memcpy(outBuffer, &data, sizeof(uint32_t));
-		outBuffer += sizeof(uint32_t);
-	}
-
-	void load(const uint8_t& data){
-		memcpy(outBuffer, &data, sizeof(uint8_t));
-		outBuffer += sizeof(uint8_t);
-	}
-
-	void load(const void* data, const size_t& bytes){
-		memcpy(outBuffer, data, bytes);
-		outBuffer += bytes;
-	}
-
-protected:
-	uint8_t * outBuffer;
-};
-
-class DeserialzeHelper{
-public:
-	DeserialzeHelper(void * inBuffer)
-		:inBuffer((uint8_t*)inBuffer){
-
-	}
-
-	//template <typename T>
-	//void unload(const T& data){
-	//	memcpy(&data, inBuffer, sizeof(T));
-	//	inBuffer += sizeof(T);
-	//}
-
-	void unload(uint8_t& data){
-		memcpy(&data, inBuffer, sizeof(uint8_t));
-		inBuffer += sizeof(uint8_t);
-	}
-
-	void unload(uint32_t& data){
-		memcpy(&data, inBuffer, sizeof(uint32_t));
-		inBuffer += sizeof(uint32_t);
-	}
-
-	void unload(void* data, const size_t& bytes){
-		memcpy(data, inBuffer, bytes);
-		inBuffer += bytes;
-	}
-protected:
-	uint8_t * inBuffer;
-};
-
-struct ImagePacket{
-	uint32_t len;//패킷 바이트수(len 포함)
-	uint32_t width;
-	uint32_t height;
-	uint8_t bytes;
-	uint8_t * buffer;
-	uint32_t bufferLen;
-
-	ImagePacket(){
-		len = width = height = bufferLen = 0;
-		bytes = 0;
-		buffer = NULL;
-	}
-
-	ImagePacket(const uint32_t& width, const uint32_t& height, const uint8_t& bytes){
-		this->init(width, height, bytes);
-	}
-
-	~ImagePacket(){
-		delete[] buffer;
-	}
-
-	void init(const uint32_t& width, const uint32_t& height, const uint8_t& bytes){
-		this->width = width;
-		this->height = height;
-		this->bytes = bytes;
-		this->buffer = NULL;
-		this->initBuffer();
-	}
-
-	void initBuffer(){
-		uint32_t newBufferLen = sizeof(uint8_t)* bytes*width*height;
-		if (newBufferLen == bufferLen)
-			return;
-		if (buffer){
-			delete[] buffer;
-		}
-		bufferLen = newBufferLen;
-		buffer = new uint8_t[bufferLen];
-		len = sizeof(width) + sizeof(height) +
-			sizeof(bytes) + bufferLen;
-	}
-
-	void load(void* out){
-		SerializeHelper loader(out);
-		loader.load(len);
-		loader.load(width);
-		loader.load(height);
-		loader.load(bytes);
-		loader.load(buffer, bufferLen);
-	}
-
-	void unload(void * in){
-		DeserialzeHelper unloader(in);
-		unloader.unload(len);
-		unloader.unload(width);
-		unloader.unload(height);
-		unloader.unload(bytes);
-		initBuffer();
-		unloader.unload(buffer, bufferLen);
-	}
-};
+#define SAVE_IMAGE_SEQ 0
 
 class PicoloY8ImageSender{
 public:
 	PicoloY8ImageSender() :channel(NULL), img(NULL), imgCount(0), packetBuffer(NULL){
-	
+		srand(time(NULL));
 	}
 
 	~PicoloY8ImageSender(){
@@ -185,9 +62,7 @@ public:
 
 		imagePacket.init(sizeX, sizeY, 1);
 		packetBuffer = new uint8_t[imagePacket.len];
-#if SAVE_BITMAP_SEQ
-		initBitmap();
-#endif
+
 		channel->RegisterCallback(this, &PicoloY8ImageSender::callback, MC_SIG_SURFACE_PROCESSING);
 	}
 
@@ -199,17 +74,23 @@ public:
 		imgCount++;
 		MC::Surface* suf = sig.Surf;
 		suf->GetParam(MC_SurfaceAddr, pvoid);
-#if SAVE_BITMAP_SEQ
-		saveBMPSeq();
+#if SAVE_IMAGE_SEQ
+		saveImageSeq();
 #endif
-		memcpy(imagePacket.buffer, pvoid, imagePacket.bufferLen);
+		//memcpy(imagePacket.buffer, pvoid, imagePacket.bufferLen);
+		/////////////////////////////////
+		RandomGenerator rg;
+		rg.initIntDistribution(0, 255);
+		for (int i = 0; i < imagePacket.bufferLen; i++){
+			imagePacket.buffer[i] = rg.randInt();
+		}
+		/////////////////////////////////
 		imagePacket.load(packetBuffer);
 		send(sock, (const char*)packetBuffer, imagePacket.len, 0);
-
-		unsigned char * pBuf = static_cast<unsigned char *>(pvoid);
+		
 		for (int w = 0; w < sizeX; w++){
 			for (int h = 0; h < sizeY; h++){
-				img->at<unsigned char>(h, w) = pBuf[h*sizeX + w];
+				img->at<unsigned char>(h, w) = imagePacket.buffer[h*sizeX + w];
 			}
 		}
 		cv::imshow("Picolo", *img);
@@ -265,53 +146,18 @@ protected:
 		channel->SetParam(MC_SignalEnable + MC_SIG_SURFACE_PROCESSING, MC_SignalEnable_ON);
 		channel->SetParam(MC_SignalEnable + MC_SIG_ACQUISITION_FAILURE, MC_SignalEnable_ON);
 		channel->SetParam(MC_SignalEnable + MC_SIG_END_CHANNEL_ACTIVITY, MC_SignalEnable_ON);
-		channel->GetParam(MC_ImageSizeX, sizeX);
-		channel->GetParam(MC_ImageSizeY, sizeY);
+		//channel->GetParam(MC_ImageSizeX, sizeX);
+		//channel->GetParam(MC_ImageSizeY, sizeY);
+		sizeX = 200;
+		sizeY = 300;
 		channel->GetParam(MC_BufferPitch, bufferPitch);
 	}
-#if SAVE_BITMAP_SEQ
-	void saveBMPSeq(){
+#if SAVE_IMAGE_SEQ
+	void saveImageSeq(){
 		char fname[20];
-		sprintf(fname, "imgs\\Seq%05d.bmp", imgCount);
-		FILE* output;
-		errno_t err = fopen_s(&output, fname, "wb");
-		fwrite(&bmpHeader, sizeof(BITMAPFILEHEADER), 1, output);
-		fwrite(&bmpInfo, sizeof(BITMAPINFOHEADER), 1, output);
-		fwrite(pallete, sizeof(RGBQUAD), 256, output);
-		fwrite(pvoid, 1, sizeX * sizeY, output);
-		fclose(output);
+		sprintf(fname, "imgs\\Seq%05d.png", imgCount);
+		cv::imwrite(fname, *img);
 	}
-
-	void initBitmap(){
-		memset(&bmpHeader, 0, sizeof(BITMAPFILEHEADER));
-		memset(&bmpInfo, 0, sizeof(BITMAPINFOHEADER));
-
-		bmpInfo.biSize = sizeof(BITMAPINFOHEADER);
-		bmpInfo.biWidth = sizeX;
-		bmpInfo.biHeight = sizeY;
-		bmpInfo.biCompression = BI_RGB;
-		bmpInfo.biPlanes = 1; //This value must be set to 1.
-		bmpInfo.biBitCount = 8; //number of bits per pixel
-		bmpInfo.biSizeImage = 0;//zero when BI_RGB bitmaps.
-		bmpInfo.biXPelsPerMeter = 0;
-		bmpInfo.biYPelsPerMeter = 0;
-		bmpInfo.biClrUsed = 0;//color table에서 실제로 사용하는 색의 개수. 0이면 biBitCount에 따라서 결정됨
-		bmpInfo.biClrImportant = 0;
-
-		bmpHeader.bfType = 0x4d42;
-		bmpHeader.bfSize = sizeof(BITMAPFILEHEADER)+sizeof(BITMAPINFOHEADER)+256 * sizeof(RGBQUAD)+sizeX*sizeY;
-		bmpHeader.bfOffBits = sizeof(BITMAPFILEHEADER)+sizeof(BITMAPINFOHEADER)+256 * sizeof(RGBQUAD);
-
-		for (int i = 0; i < 256; i++){
-			pallete[i].rgbBlue = i;
-			pallete[i].rgbGreen = i;
-			pallete[i].rgbRed = i;
-			pallete[i].rgbReserved = 0;
-		}
-	}
-	BITMAPFILEHEADER bmpHeader;
-	BITMAPINFOHEADER bmpInfo;
-	RGBQUAD pallete[256];
 #endif
 	int sizeX, sizeY, bufferPitch;
 	
@@ -334,17 +180,17 @@ int main(int argc, char** argv)
 {
 	MC::Initialize();
 	PicoloY8ImageSender picolo;
-	if (!picolo.init("VID1", "172.0.0.1", 50000)){
+	if (!picolo.init("VID1", "192.168.2.14", 45000)){
 		printf("Failed to initialize Picolo Reader\n");
 		return 0;
 	}
 	cv::namedWindow("Picolo", CV_WINDOW_AUTOSIZE);
 	picolo.setActive();
-
+	
 	printf("Press q or Q to terminate.\n");
 	bool running = true;
 	while (running){
-		int key = cv::waitKey(0);
+		int key = cv::waitKey(1);
 		switch (key){
 		case 'q':case 'Q':
 			running = false;
@@ -359,7 +205,6 @@ int main(int argc, char** argv)
 	printf("Bye Bye~");
 	MC::Terminate();
 
-	
 	return 0;
 }
 
