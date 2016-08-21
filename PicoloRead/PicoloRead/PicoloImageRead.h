@@ -60,7 +60,7 @@ private:
 		suf->GetParam(MC_SurfaceAddr, buffer);
 		std::shared_ptr<cv::Mat> img(new cv::Mat(sizeY, sizeX, cvPixelType));
 		memcpy(img->data, buffer, img->total()*img->elemSize());
-		printf("%d\n", imgCount);
+		//printf("%d\n", imgCount);
 		this->userCallback(img, ch, sig);
 	}
 protected:

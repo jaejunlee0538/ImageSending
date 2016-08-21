@@ -54,7 +54,7 @@ struct CVImagePacket{
 	}
 
 	uint32_t getPacketLength(){
-		return 3*sizeof(uint32_t) + 3*sizeof(int32_t) + cvBufferLength(*cvImg);
+		return 3 * sizeof(uint32_t)+3 * sizeof(int32_t)+cvBufferLength(*cvImg);
 	}
 
 	void load(void* out){
@@ -99,6 +99,7 @@ struct CVImagePacket{
 		return true;
 	}
 };
+
 
 class CVImagesPacket{
 public:

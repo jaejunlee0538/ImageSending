@@ -4,48 +4,56 @@
 #include <boost/bind.hpp>
 #include <queue>
 #include <thread>
+#include <mutex>
 using boost::asio::ip::tcp;
+class ImageServer;
 
-class Session{
+class FakeMutex{
+public:
+	void lock(){}
+	void unlock(){}
+};
+typedef FakeMutex MutexType;
+
+class ImageTransportSession{
 public:
 	typedef std::vector<uint8_t> BufferType;
 	typedef std::shared_ptr<BufferType> BufferTypePtr;
 
-	Session(boost::asio::io_service& io_service)
-		:m_socket(io_service){
-		
+	ImageTransportSession(boost::asio::io_service& io_service, ImageServer* serverPtr);
+	~ImageTransportSession(){
+
 	}
 
 	tcp::socket& socket(){
 		return m_socket;
 	}
 
-	void start(){
-		m_sendThread.reset(new std::thread(&Session::taskThread, this));
-	}
+	void start();
 
 	void addTask(const BufferTypePtr& taskPtr){
+		lock_task.lock();
 		taskQ.push(taskPtr);
+		lock_task.unlock();
 	}
 
+	void destroy();
 private:
-	void taskThread(){
-		tcp::endpoint remote_ep = m_socket.remote_endpoint();
-		printf("Image transport session started(to %s)\n", remote_ep.address().to_string().c_str());
-		while (m_socket.is_open()){
-			if (!taskQ.empty()){
-				BufferTypePtr task = taskQ.front();
-				taskQ.pop();
-				m_socket.send(boost::asio::buffer(*task));
-			}
-		}
-		printf("Image transport session ends(to %s)\n", remote_ep.address().to_string().c_str());
-	}
+	void recvHandler(const boost::system::error_code& error,
+		size_t bytes_transferred);
+
+	void taskThread();
 private:
+	enum{ RECV_BUFFER_SIZE = 100 };
+
 	std::queue<const BufferTypePtr> taskQ;
 	tcp::socket m_socket;
+	tcp::endpoint remote_ep;
 	std::shared_ptr<std::thread> m_sendThread;
 	bool running;
+	char rcvBuffer[RECV_BUFFER_SIZE];
+	ImageServer * m_serverPtr;
+	MutexType lock_task;
 };
 
 class ImageServer
@@ -59,7 +67,7 @@ public:
 	}
 
 	~ImageServer(){
-
+		m_acceptor.close();
 	}
 
 	void stop(){
@@ -68,30 +76,40 @@ public:
 
 	void startAccept(){
 		printf("Waiting for connection...\n");
-		Session* session = new Session(m_io_service);
+		ImageTransportSession* session = new ImageTransportSession(m_io_service, this);
 		m_acceptor.async_accept(session->socket(),
 			boost::bind(&ImageServer::handleAccept, this, session,
 			boost::asio::placeholders::error));
+		accepting = true;
 	}
 
-	void addTask(const Session::BufferTypePtr& imageBufferPtr){
+	void addTask(const ImageTransportSession::BufferTypePtr& imageBufferPtr){
+		lock_sessions.lock();
 		for (size_t i = 0; i < n_sessions; i++){
 			m_sessions[i]->addTask(imageBufferPtr);
 		}
+		lock_sessions.unlock();
 	}
 
 	bool isSessionsFull() const{
 		return n_sessions >= MAX_NUM_SESSIONS;
 	}
+
+	bool isConnected() const{
+		return n_sessions > 0;
+	}
 private:
-	void addSession(Session* session){
+	void addSession(ImageTransportSession* session){
+		lock_sessions.lock();
 		if (n_sessions < MAX_NUM_SESSIONS){
 			m_sessions[n_sessions] = session;
 			n_sessions++;
 		}
+		lock_sessions.unlock();
 	}
 
-	void removeSession(Session* session){
+	void removeSession(ImageTransportSession* session){
+		lock_sessions.lock();
 		bool found = false;
 		if (m_sessions[0] == session){
 			found = true;
@@ -108,10 +126,15 @@ private:
 		}
 		n_sessions--;
 
-		startAccept();
+		lock_sessions.unlock();
+		if (!accepting){
+			startAccept();
+		}
 	}
 
-	void handleAccept(Session* session, const boost::system::error_code& err){
+	void handleAccept(ImageTransportSession* session, const boost::system::error_code& err){
+		accepting = false;
+
 		if (!err){
 			tcp::endpoint client = session->socket().remote_endpoint();
 			printf("Port %d connected to %s\n", client.port(), client.address().to_string().c_str());
@@ -130,8 +153,13 @@ private:
 
 	boost::asio::io_service& m_io_service;
 	boost::asio::ip::tcp::acceptor m_acceptor;
-	Session* m_sessions[MAX_NUM_SESSIONS];
+	ImageTransportSession* m_sessions[MAX_NUM_SESSIONS];
 	size_t n_sessions;
+	bool accepting;
+
+	MutexType lock_sessions;
+
+	friend class ImageTransportSession;
 };
 
 #endif
