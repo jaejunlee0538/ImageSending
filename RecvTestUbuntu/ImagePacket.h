@@ -1,141 +1,231 @@
-//
-// Created by ub1404 on 16. 8. 20.
-//
-
-#ifndef RECVTESTUBUNTU_IMAGEPACKET_H
-#define RECVTESTUBUNTU_IMAGEPACKET_H
-#include <stdint.h>
+#ifndef IMAGE_PACKET_H_
+#define IMAGE_PACKET_H_
 #include <stdlib.h>
-#include <string.h>
-class SerializeHelper{
+#include <stdint.h>
+#include "SerializeHelper.h"
+#include <opencv2/core.hpp>
+#include <vector>
+#include <memory>
+/*
+ÀÌ¹ÌÁö º¸³»´Â ºÎºÐ
+CVImagesPacket packet;
+packet.init({640,720,CV_8U}, 4);
+1. from cv::Mat
+cv::Mat img[4];
+//acquiring 4 images
+for(size_t i=0;i<4;i++){
+packet.setImage(i, img[i]);
+}
+2. from raw buffer
+uint8_t * buffer[4];
+//allocate and fill the buffers
+for(size_t i=0;i<4;i++){
+packet.setImage(i, buffer[i]);//
+}
+
+uint8_t * packetBuffer = packet.allocatePacketMemory();
+packet.load(packetBuffer);
+
+send(packetBuffer, packet.length()...);
+
+///////////////////////////////////////////////////////
+ÀÌ¹ÌÁö ¹Þ´Â ºÎºÐ
+std::string buffer;
+//receive packet
+packet.unload(buffer.c_str(), buffer.length());
+*/
+inline size_t cvBufferLength(const cv::Mat& mat){
+	return mat.total()*mat.elemSize();
+}
+
+struct CVMatConfig{
+	int cols;
+	int rows;
+	int type;
+};
+
+struct CVImagePacket{
+	uint32_t seq;//packet seq
+	uint32_t id;
+	std::shared_ptr<cv::Mat> cvImg;
+
+	CVImagePacket(){
+
+	}
+
+	uint32_t getPacketLength(){
+		return 3 * sizeof(uint32_t)+3 * sizeof(int32_t)+cvBufferLength(*cvImg);
+	}
+
+	void load(void* out){
+		uint32_t len;
+		int32_t cols, rows, type;
+		SerializeHelper loader(out);
+		len = getPacketLength();
+		loader.load(len);
+		loader.load(id);
+		loader.load(seq);
+		cols = cvImg->cols;
+		rows = cvImg->rows;
+		type = cvImg->type();
+		loader.load(cols);
+		loader.load(rows);
+		loader.load(type);
+		loader.load(cvImg->data, cvBufferLength(*cvImg));
+	}
+
+	bool unload(const void * in, const uint32_t& packetLen){
+		uint32_t len;
+		uint32_t n; //ÀÌ¹ÌÁö ¼ö
+		int32_t cols, rows, type;
+
+		DeserialzeHelper unloader(in);
+		unloader.unload(len);
+		if (len != packetLen){
+			return false;
+		}
+		unloader.unload(id);
+		unloader.unload(seq);
+
+		if (!cvImg){
+			cvImg.reset(new cv::Mat());
+		}
+		unloader.unload(cols);
+		unloader.unload(rows);
+		unloader.unload(type);
+		cvImg->create(rows, cols, type);
+		unloader.unload(cvImg->data, cvBufferLength(*cvImg));
+
+		return true;
+	}
+};
+
+
+class CVImagesPacket{
 public:
-    SerializeHelper(void * outBuffer)
-            :outBuffer((uint8_t*)outBuffer){
+	CVImagesPacket(){
+		len = -1;
+		seq = -1;
+		std::string str;
+	}
 
-    }
+	~CVImagesPacket(){
 
-    //template <typename T>
-    //void load(const T& data){
-    //	memcpy(outBuffer, &data, sizeof(T));
-    //	outBuffer += sizeof(T);
-    //}
+	}
 
-    void load(const uint32_t& data){
-        memcpy(outBuffer, &data, sizeof(uint32_t));
-        outBuffer += sizeof(uint32_t);
-    }
+	uint8_t* allocatePacketMemory() const{
+		return new uint8_t[len];
+	}
 
-    void load(const uint8_t& data){
-        memcpy(outBuffer, &data, sizeof(uint8_t));
-        outBuffer += sizeof(uint8_t);
-    }
+	const uint32_t& length()const {
+		return len;
+	}
 
-    void load(const void* data, const size_t& bytes){
-        memcpy(outBuffer, data, bytes);
-        outBuffer += bytes;
-    }
+	void setSequence(const uint32_t& seq) {
+		this->seq = seq;
+	}
 
+	void addImage(const CVMatConfig& config){
+		images.push_back(cv::Mat());
+		images.back().create(config.rows, config.cols, config.type);
+		computePacketLength();
+	}
+
+	void init(const std::vector<CVMatConfig>& configs){
+		images.resize(configs.size());
+		for (size_t i = 0; i < configs.size(); i++){
+			images[i].create(configs[i].rows, configs[i].cols, configs[i].type);
+		}
+		computePacketLength();
+	}
+
+	void init(const CVMatConfig& config, const uint32_t& nImg){
+		images.resize(nImg);
+		for (size_t i = 0; i < nImg; i++){
+			images[i].create(config.rows, config.cols, config.type);
+		}
+		computePacketLength();
+	}
+
+	const cv::Mat& getImage(const size_t& idx) const{
+		return images[idx];//out of range ¿¡·¯ ¹ß»ý °¡´É.
+	}
+
+	/*
+	È£Ãâ Àü¿¡ ¹Ýµå½Ã init method¸¦ ÅëÇØ ³»ºÎ images°¡ ¿Ã¹Ù¸£°Ô ÃÊ±âÈ­µÇ¾î ÀÖ¾î¾ß ÇÑ´Ù.
+	*/
+	bool setImage(const size_t& idx, const uint8_t* buffer){
+		if (idx >= images.size()){
+			//out of index
+			return false;
+		}
+		memcpy(images[idx].data, buffer, images[idx].total()*images[idx].elemSize());
+	}
+
+	bool setImage(const size_t& idx, const cv::Mat& img){
+		if (idx >= images.size()){
+			//out of index
+			return false;
+		}
+		images[idx] = img;
+		return true;
+	}
+
+	void load(void* out){
+		uint32_t n = images.size();
+		int32_t cols, rows, type;
+		SerializeHelper loader(out);
+		loader.load(len);
+		loader.load(seq);
+		loader.load(n);
+		for (size_t i = 0; i < n; i++){
+			cols = images[i].cols;
+			rows = images[i].rows;
+			type = images[i].type();
+			loader.load(cols);
+			loader.load(rows);
+			loader.load(type);
+			loader.load(images[i].data, cvBufferLength(images[i]));
+		}
+	}
+
+	bool unload(const void * in, const uint32_t& packetLen){
+		uint32_t n; //ÀÌ¹ÌÁö ¼ö
+		int32_t cols, rows, type;
+
+		DeserialzeHelper unloader(in);
+		unloader.unload(len);
+		if (len != packetLen){
+			return false;
+		}
+		unloader.unload(seq);
+		unloader.unload(n);
+		images.resize(n);
+		for (uint32_t i = 0; i < n; i++){
+			unloader.unload(cols);
+			unloader.unload(rows);
+			unloader.unload(type);
+			images[i].create(cols, rows, type);
+			unloader.unload(images[i].data, cvBufferLength(images[i]));
+		}
+		return true;
+	}
 protected:
-    uint8_t * outBuffer;
-};
+	size_t cvBufferLength(const cv::Mat& mat) const{
+		return mat.total()*mat.elemSize();
+	}
 
-class DeserialzeHelper{
-public:
-    DeserialzeHelper(void * inBuffer)
-            :inBuffer((uint8_t*)inBuffer){
-
-    }
-
-    //template <typename T>
-    //void unload(const T& data){
-    //	memcpy(&data, inBuffer, sizeof(T));
-    //	inBuffer += sizeof(T);
-    //}
-
-    void unload(uint8_t& data){
-        memcpy(&data, inBuffer, sizeof(uint8_t));
-        inBuffer += sizeof(uint8_t);
-    }
-
-    void unload(uint32_t& data){
-        memcpy(&data, inBuffer, sizeof(uint32_t));
-        inBuffer += sizeof(uint32_t);
-    }
-
-    void unload(void* data, const size_t& bytes){
-        memcpy(data, inBuffer, bytes);
-        inBuffer += bytes;
-    }
+	void computePacketLength(){
+		len = 0;
+		len += sizeof(seq);
+		for (size_t i = 0; i < images.size(); i++){
+			len += 3 * sizeof(int32_t);//cols, rows, type µ¥ÀÌÅÍ
+			len += cvBufferLength(images[i]); //¹öÆÛ »çÀÌÁî
+		}
+	}
 protected:
-    uint8_t * inBuffer;
+	uint32_t len;//ÆÐÅ¶ ¹ÙÀÌÆ®¼ö(len Æ÷ÇÔ)
+	uint32_t seq;//packet seq
+	std::vector<cv::Mat> images;//cv::Mat array
 };
-
-struct ImagePacket{
-    uint32_t len;//Ã†ÃÃ…Â¶ Â¹Ã™Ã€ÃŒÃ†Â®Å’Ã¶(len Ã†Ã·Ã‡Ã”)
-    uint32_t width;
-    uint32_t height;
-    uint8_t bytes;
-    uint8_t * buffer;
-    uint32_t bufferLen;
-
-    ImagePacket(){
-        len = width = height = bufferLen = 0;
-        bytes = 0;
-        buffer = NULL;
-    }
-
-    ImagePacket(const uint32_t& width, const uint32_t& height, const uint8_t& bytes){
-        this->init(width, height, bytes);
-    }
-
-    ~ImagePacket(){
-        delete[] buffer;
-    }
-
-    void init(const uint32_t& width, const uint32_t& height, const uint8_t& bytes){
-        this->width = width;
-        this->height = height;
-        this->bytes = bytes;
-        this->buffer = NULL;
-        this->initBuffer();
-    }
-
-    void initBuffer(){
-        uint32_t newBufferLen = sizeof(uint8_t)* bytes*width*height;
-        if (newBufferLen == bufferLen)
-            return;
-        if (buffer){
-            delete[] buffer;
-        }
-        bufferLen = newBufferLen;
-        buffer = new uint8_t[bufferLen];
-        len = sizeof(width) + sizeof(height) +
-              sizeof(bytes) + bufferLen;
-    }
-
-    void load(void* out){
-        SerializeHelper loader(out);
-        loader.load(len);
-        loader.load(width);
-        loader.load(height);
-        loader.load(bytes);
-        loader.load(buffer, bufferLen);
-    }
-
-    bool unload(void * in, const size_t& packLen){
-        DeserialzeHelper unloader(in);
-        unloader.unload(len);
-        if(len != packLen){
-            fprintf(stderr, "Packet length info in the packet and actual packet length are different.(%d vs %d)\n", len, packLen);
-            return false;
-        }
-        unloader.unload(width);
-        unloader.unload(height);
-        unloader.unload(bytes);
-        initBuffer();
-        unloader.unload(buffer, bufferLen);
-        return true;
-    }
-};
-
-#endif //RECVTESTUBUNTU_IMAGEPACKET_H
+#endif
