@@ -1,67 +1,91 @@
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <opencv2/core.hpp>
-#include <opencv2/highgui.hpp>
+#include <boost/asio.hpp>
 #include "ImagePacket.h"
-#define RECV_PORT 45000
-#define BUFFER_SIZE 400000
+#include <unistd.h>
+#include <opencv2/opencv.hpp>
+#include <map>
+#include <algorithm>
+#include "PreciseClock.h"
+#include "CVWindow.h"
+using boost::asio::ip::tcp;
+#define BUFFER_SIZE	4096
 
-void showErrorMessage(const char* msg){
-    fprintf(stderr, "Error : %s\n", msg);
-}
 
-int main() {
-    int sock;
-    ImagePacket packet;
-    socklen_t sender_adr_sz;
-    sockaddr_in serv_adr, from_adr;
+int main(int argc ,char** argv)
+{
+    FrequencyEstimator freq;
+    try{
+        boost::asio::io_service io_service;
+        tcp::resolver resolver(io_service);
+        tcp::socket socket(io_service);
+        boost::asio::connect(socket, resolver.resolve({ "192.168.2.9", "50000" }));
 
-    sock = socket(PF_INET, SOCK_DGRAM, 0);
-    if(sock == -1){
-        showErrorMessage("socket() error");
-        return 0;
-    }
-    memset(&serv_adr, 0, sizeof(serv_adr));
-    serv_adr.sin_family = AF_INET;
-    serv_adr.sin_addr.s_addr = htonl(INADDR_ANY);
-    serv_adr.sin_port = htons(RECV_PORT);
+        printf("Starting loop...\n");
+        std::vector<uint8_t> packet;
+        size_t packPos = 0;
 
-    if(bind(sock, (sockaddr*)&serv_adr, sizeof(serv_adr)) == -1){
-        showErrorMessage("bind() error");
-        return 0;
-    }
-    cv::namedWindow("Picolo");
-    cv::waitKey(1);
+        uint8_t buffer[BUFFER_SIZE];
+        size_t readLen = 0;
+        CVImagePacket imagePacket;
+        int key = -1;
 
-    fprintf(stderr, "Loop started\n");
-    size_t n_recv;
-    uint8_t buffer[BUFFER_SIZE];
-    bool running = true;
-    while(running){
-        sender_adr_sz = sizeof(from_adr);
-        n_recv = recvfrom(sock, buffer, BUFFER_SIZE, 0, (sockaddr*)&from_adr, &sender_adr_sz);
-        packet.unload(buffer, n_recv);
-        cv::Mat img(packet.height, packet.width, CV_8U);
-        for(int w=0;w<packet.width;w++){
-            for(int h=0;h<packet.height;h++){
-                img.at<uint8_t>(h, w) = packet.buffer[packet.width*h+w];
+        while (true){
+            size_t nRecv = boost::asio::read(socket, boost::asio::buffer(&buffer[readLen], BUFFER_SIZE-readLen));
+
+            if (nRecv){
+                readLen += nRecv;
+                if (readLen < sizeof(uint32_t)){
+                    continue;
+                }
+                if (packPos == 0){
+                    uint32_t len = *(uint32_t*)(&buffer[0]);
+                    if (packet.size() != len){
+                        printf("allocating %u bytes", len);
+                        packet.resize(len);
+                    }
+                }
+
+                size_t more = packet.size() - packPos;
+                if (more < readLen){
+                    memcpy(&packet[packPos], buffer, more);
+                    packPos += more;
+                    memcpy(&buffer[0], &buffer[more], readLen - more);
+                    readLen -= more;
+                    if (packPos == packet.size()){
+                        freq.update(1);
+//                        std::cerr<<freq.getFrequency()<<std::endl;
+                        packPos = 0;
+                        imagePacket.unload(&packet[0], packet.size());
+                        CVUniqueWindows::imshow(imagePacket.id, *(imagePacket.cvImg));
+                        //fprintf(stderr, "%d:%d\t%d X %d\n", imagePacket.id, imagePacket.seq, imagePacket.cvImg->rows, imagePacket.cvImg->cols);
+                        key = cv::waitKey(1);
+                    }
+                }
+                else{
+                    memcpy(&packet[packPos], buffer, readLen);
+                    packPos += readLen;
+                    readLen = 0;
+                }
             }
-        }
-        cv::imshow("Picolo", img);
-        int key = cv::waitKey(1);
+            else{
+                printf("Disconnected\n");
+                break;
+            }
+            if (key == 'q'){
+                break;
+            }
 
-        switch((char)key){
-            case 'q': case 'Q':
-                running = false;
-                printf("Stopping...\n");
-                break;
-            default:
-                printf("default\n");
-                break;
         }
+
+        socket.shutdown(tcp::socket::shutdown_both);
+        socket.close();
+    }
+    catch (std::exception& e){
+        std::cerr << "Exception : " << e.what() << std::endl;
     }
 
     return 0;
 }
+
