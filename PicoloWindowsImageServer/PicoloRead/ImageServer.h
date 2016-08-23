@@ -5,6 +5,8 @@
 #include <queue>
 #include <thread>
 #include <mutex>
+#include <boost/thread.hpp>
+
 using boost::asio::ip::tcp;
 class ImageServer;
 
@@ -13,7 +15,7 @@ public:
 	void lock(){}
 	void unlock(){}
 };
-typedef FakeMutex MutexType;
+typedef boost::shared_mutex MutexType;
 
 class ImageTransportSession{
 public:
@@ -21,9 +23,7 @@ public:
 	typedef std::shared_ptr<BufferType> BufferTypePtr;
 
 	ImageTransportSession(boost::asio::io_service& io_service, ImageServer* serverPtr);
-	~ImageTransportSession(){
-
-	}
+	~ImageTransportSession();
 
 	tcp::socket& socket(){
 		return m_socket;
@@ -31,13 +31,8 @@ public:
 
 	void start();
 
-	void addTask(const BufferTypePtr& taskPtr){
-		lock_task.lock();
-		taskQ.push(taskPtr);
-		lock_task.unlock();
-	}
+	void addTask(const BufferTypePtr& taskPtr);
 
-	void destroy();
 private:
 	void recvHandler(const boost::system::error_code& error,
 		size_t bytes_transferred);
@@ -53,8 +48,9 @@ private:
 	bool running;
 	char rcvBuffer[RECV_BUFFER_SIZE];
 	ImageServer * m_serverPtr;
-	MutexType lock_task;
+	FakeMutex lock_task;
 };
+
 
 class ImageServer
 {
@@ -63,15 +59,18 @@ public:
 		:m_io_service(io_service), m_acceptor(io_service, tcp::endpoint(tcp::v4(), port))
 		, n_sessions(0)
 	{
-
+		for (size_t i = 0; i < MAX_NUM_SESSIONS; i++){
+			m_sessions[i] = NULL;
+		}
 	}
 
 	~ImageServer(){
-		m_acceptor.close();
+
 	}
 
 	void stop(){
 		m_io_service.stop();
+		removeAllSessions();
 	}
 
 	void startAccept(){
@@ -83,50 +82,70 @@ public:
 		accepting = true;
 	}
 
+	void addCamera(){
+
+	}
+
 	void addTask(const ImageTransportSession::BufferTypePtr& imageBufferPtr){
-		lock_sessions.lock();
+		boost::unique_lock<boost::shared_mutex> uniqLock(lock_sessions);
 		for (size_t i = 0; i < n_sessions; i++){
-			m_sessions[i]->addTask(imageBufferPtr);
+			if (m_sessions[i] != NULL){
+				m_sessions[i]->addTask(imageBufferPtr);
+			}
 		}
-		lock_sessions.unlock();
 	}
 
 	bool isSessionsFull() const{
+		boost::shared_lock<boost::shared_mutex> shrdLock(lock_sessions);
 		return n_sessions >= MAX_NUM_SESSIONS;
 	}
 
 	bool isConnected() const{
+		boost::shared_lock<boost::shared_mutex> shrdLock(lock_sessions);
 		return n_sessions > 0;
 	}
 private:
-	void addSession(ImageTransportSession* session){
-		lock_sessions.lock();
-		if (n_sessions < MAX_NUM_SESSIONS){
-			m_sessions[n_sessions] = session;
-			n_sessions++;
+	int findSession(ImageTransportSession* pSession) const {
+		for (int i = 0; i < MAX_NUM_SESSIONS; i++){
+			if (m_sessions[i] == pSession){
+				return i;
+			}
 		}
-		lock_sessions.unlock();
+		return -1;
+	}
+
+	bool addSession(ImageTransportSession* session){
+		boost::upgrade_lock<boost::shared_mutex> shrdLock(lock_sessions);
+		int emptySession = findSession(NULL);
+		if (emptySession < 0){
+			return false;
+		}
+		boost::upgrade_to_unique_lock<boost::shared_mutex> uniqLock(shrdLock);
+		m_sessions[emptySession] = session;
+		n_sessions++;
+		return true;
+	}
+
+	void removeAllSessions(){
+		boost::unique_lock<boost::shared_mutex> uniqLock(lock_sessions);
+		for (size_t i = 0; i < n_sessions; i++){
+			if (m_sessions[i]){
+				delete m_sessions[i]; m_sessions[i] = NULL;
+			}
+		}
 	}
 
 	void removeSession(ImageTransportSession* session){
-		lock_sessions.lock();
-		bool found = false;
-		if (m_sessions[0] == session){
-			found = true;
+		boost::upgrade_lock<boost::shared_mutex> shrdLock(lock_sessions);
+		int pos = findSession(session);
+		if (pos < 0){
+			return;
 		}
-		for (size_t i = 0; i<MAX_NUM_SESSIONS; i++){
-			if (found){
-				m_sessions[i - 1] = m_sessions[i];
-			}else if (m_sessions[i] == session){
-				found = true;
-			}
+		{
+			boost::upgrade_to_unique_lock<boost::shared_mutex> uniqLock(shrdLock);
+			delete session;
+			m_sessions[pos] = NULL;
 		}
-		if (found){
-			m_sessions[MAX_NUM_SESSIONS - 1] = NULL;
-		}
-		n_sessions--;
-
-		lock_sessions.unlock();
 		if (!accepting){
 			startAccept();
 		}
@@ -153,11 +172,13 @@ private:
 
 	boost::asio::io_service& m_io_service;
 	boost::asio::ip::tcp::acceptor m_acceptor;
+	//DummyClass2 __DC2; //아무런 의미 없는 변수이지만 없으면 알수 없는 에러 발생.
 	ImageTransportSession* m_sessions[MAX_NUM_SESSIONS];
+
 	size_t n_sessions;
 	bool accepting;
 
-	MutexType lock_sessions;
+	mutable boost::shared_mutex lock_sessions;
 
 	friend class ImageTransportSession;
 };

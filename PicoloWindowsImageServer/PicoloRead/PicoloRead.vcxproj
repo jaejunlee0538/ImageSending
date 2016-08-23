@@ -22,6 +22,7 @@
     <ProjectGuid>{0A599068-9BA5-4D40-8FA6-5D3514529B69}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>PicoloRead</RootNamespace>
+    <ProjectName>PicoloWindowsImageServer</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
