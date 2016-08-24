@@ -1,30 +1,21 @@
 #include "PicoloImageServer.h"
-CVImagesPacket imagesPacket;
 
-PicoloImageSender::PicoloImageSender(ImageServer* server, const uint32_t& id)
-:m_serverPtr(server),m_id(id){
-
-}
-
-bool PicoloImageSender::init(const size_t& boardIdx, const char* connector, const char* camType, const int& pixelType){
-	if (!PicoloImageReader::init(boardIdx, connector, camType, pixelType)){
+bool PicoloImageSender::init(const size_t& boardIdx, const char* connectorName, const char* camType, const int& pixelType){
+	if (!PicoloImageReader::init(boardIdx, connectorName, camType, pixelType)){
 		return false;
 	}
 	CVMatConfig config;
 	config.cols = this->sizeX;
 	config.rows = this->sizeY;
 	config.type = this->cvPixelType;
-	imagesPacket.addImage(config);
 }
 
-const std::string& PicoloImageSender::getConnectorName() const {
-	return this->connector;
-}
+
 
 void PicoloImageSender::userCallback(std::shared_ptr<cv::Mat>& img, MC::Channel & ch, MC::SignalInfo & sig)
 {
 	freq.update(1);
-	if (m_serverPtr->isConnected()){
+	if (m_serverPtr && m_serverPtr->isConnected()){
 		//image packet °´Ã¼ »ý¼º
 		CVImagePacket packet;
 		packet.cvImg = img;
@@ -41,4 +32,5 @@ void PicoloImageSender::userCallback(std::shared_ptr<cv::Mat>& img, MC::Channel 
 	
 	cv::imshow(this->connector.c_str(), *img);
 }
+
 

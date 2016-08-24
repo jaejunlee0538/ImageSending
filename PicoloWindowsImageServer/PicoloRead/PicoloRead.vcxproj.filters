@@ -18,9 +18,6 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="PicoloRead.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="PicoloImageRead.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -31,6 +28,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="PicoloImageServer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="RunPicoloImageServer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

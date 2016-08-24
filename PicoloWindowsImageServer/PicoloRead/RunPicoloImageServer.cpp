@@ -10,7 +10,6 @@
 #include "ImageServer.h"
 #include "PicoloImageServer.h"
 
-CVImagesPacket imagePacket;
 
 #define PORT_NUMBER	50000	//이미지를 전송할 포트 번호
 std::vector<std::string> conns{ "VID2" };//그래버 번호
@@ -25,9 +24,12 @@ int main(int argc, char** argv)
 {
 	boost::asio::io_service io_service;
 	ImageServer server(io_service, PORT_NUMBER);
+	char paramBuffer[100];
 
 	MC::Initialize();
-	
+
+	std::cerr << PicoloImageSender::getBoardsInfoString() << std::endl;
+
 	std::vector<PicoloImageSender> picolo(conns.size());
 	for (size_t i = 0; i < conns.size(); i++){
 		picolo[i].setServer(&server);

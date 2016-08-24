@@ -156,7 +156,7 @@
     <ClCompile Include="ImageServer.cpp" />
     <ClCompile Include="PicoloImageRead.cpp" />
     <ClCompile Include="PicoloImageServer.cpp" />
-    <ClCompile Include="PicoloRead.cpp" />
+    <ClCompile Include="RunPicoloImageServer.cpp" />
     <ClCompile Include="PreciseClock.cpp" />
   </ItemGroup>
   <ItemGroup>
