@@ -60,7 +60,11 @@ int main(int argc ,char** argv)
                         imagePacket.unload(&packet[0], packet.size());
                         CVUniqueWindows::imshow(imagePacket.id, *(imagePacket.cvImg));
                         //fprintf(stderr, "%d:%d\t%d X %d\n", imagePacket.id, imagePacket.seq, imagePacket.cvImg->rows, imagePacket.cvImg->cols);
-                        key = cv::waitKey(1);
+                        int key_tmp = cv::waitKey(1);
+                        if(key_tmp!= -1){
+                            key= key_tmp;
+                            printf("%c pressed\n", key);
+                        }
                     }
                 }
                 else{
@@ -73,9 +77,10 @@ int main(int argc ,char** argv)
                 printf("Disconnected\n");
                 break;
             }
-            if (key == 'q'){
+            if ((char)key == 'q'){
                 break;
             }
+            key = -1;
 
         }
 
