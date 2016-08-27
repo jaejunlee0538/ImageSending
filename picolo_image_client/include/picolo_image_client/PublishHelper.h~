@@ -1,0 +1,95 @@
+//
+// Created by ub1404 on 16. 5. 10.
+//
+
+#ifndef PROJECT_PUBLISHHELPER_H
+#define PROJECT_PUBLISHHELPER_H
+#include <ros/ros.h>
+#include <ros/publisher.h>
+#include <string>
+#include <PicoloImageClient/PreciseClock.h>
+#include <map>
+    template <typename MsgType>
+    class PublishHelper {
+    public:
+        PublishHelper(){}
+        PublishHelper(const std::string& topic, const unsigned int& q_size){
+            advertise(topic, q_size);
+        }
+        void advertise(const std::string& topic, const unsigned int& q_size){
+            nh.advertise<MsgType>(topic, q_size);
+        }
+
+        void publish(const MsgType& msg){
+            publisher.publish(msg);
+            freq.update(1);
+        }
+
+        void publish(const boost::shared_ptr<MsgType>& msg){
+            publisher.publish(msg);
+            freq.update(1);
+        }
+
+        uint32_t getNumOfSubscribers() const{
+            return publisher.getNumSubscribers();
+        }
+
+        double getFrequency() const{
+            return freq.getFrequency();
+        }
+
+        ros::Publisher& getPublisher(){
+            return publisher;
+        }
+    private:
+        ros::Publisher publisher;
+        ros::NodeHandle nh;
+        FrequencyEstimator freq;
+        int id;
+    };
+
+    template <typename MsgType>
+    class PublishersManager{
+    public:
+        void addTopic(const std::string& topic, const unsigned int& q_size, const int& id){
+            IDPublishMap::iterator iter = publishers.find(id);
+            if(iter != publishers.end()){
+                throw std::runtime_error("Already defined ID");
+            }
+            PublishHelperTypePtr publisher(new PublishHelperType(topic, q_size));
+            publishers[id] = publisher;
+        }
+
+        void publish(const int& id, const boost::shared_ptr<MsgType>& msg){
+            IDPublishMap::iterator iter = publishers.find(id);
+            if(iter == publishers.end()){
+                throw std::runtime_error("Undefined topic");
+            }
+            iter->second->publish(msg);
+        }
+
+        const std::string& getTopic(const int& id){
+            IDPublishMap::iterator iter = publishers.find(id);
+            if(iter == publishers.end()){
+                throw std::runtime_error("Undefined topic");
+            }
+            return iter->second->getPublisher().getTopic();
+        }
+
+        double getFrequency(const int& id){
+            IDPublishMap::iterator iter = publishers.find(id);
+            if(iter == publishers.end()){
+                throw std::runtime_error("Undefined topic");
+            }
+            return iter->second->getFrequency();
+        }
+
+    protected:
+
+        typedef PublishHelper<MsgType> PublishHelperType;
+        typedef boost::shared_ptr<PublishHelperType> PublishHelperTypePtr;
+        typedef std::map<int, PublishHelperTypePtr> IDPublishMap;
+        IDPublisherMap publishers;
+    };
+
+#endif //PROJECT_PUBLISHHELPER_H
