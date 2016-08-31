@@ -1,0 +1,51 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2013
+VisualStudioVersion = 12.0.21005.1
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PicoloReader", "PicoloReader\PicoloReader.vcxproj", "{E5E4F26B-6C74-416E-B59B-41C9B81FD117}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PicoloWindowsImageServer", "PicoloImageServer\PicoloImageServer.vcxproj", "{0A599068-9BA5-4D40-8FA6-5D3514529B69}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PicoloImageRecorder", "PicoloImageRecorder\PicoloImageRecorder.vcxproj", "{13011BE8-74F9-4A90-B13C-EBC6AE37AA11}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|ARM = Debug|ARM
+		Debug|Win32 = Debug|Win32
+		Debug|x64 = Debug|x64
+		Release|ARM = Release|ARM
+		Release|Win32 = Release|Win32
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E5E4F26B-6C74-416E-B59B-41C9B81FD117}.Debug|ARM.ActiveCfg = Debug|Win32
+		{E5E4F26B-6C74-416E-B59B-41C9B81FD117}.Debug|Win32.ActiveCfg = Debug|Win32
+		{E5E4F26B-6C74-416E-B59B-41C9B81FD117}.Debug|Win32.Build.0 = Debug|Win32
+		{E5E4F26B-6C74-416E-B59B-41C9B81FD117}.Debug|x64.ActiveCfg = Debug|Win32
+		{E5E4F26B-6C74-416E-B59B-41C9B81FD117}.Release|ARM.ActiveCfg = Release|Win32
+		{E5E4F26B-6C74-416E-B59B-41C9B81FD117}.Release|Win32.ActiveCfg = Release|Win32
+		{E5E4F26B-6C74-416E-B59B-41C9B81FD117}.Release|Win32.Build.0 = Release|Win32
+		{E5E4F26B-6C74-416E-B59B-41C9B81FD117}.Release|x64.ActiveCfg = Release|Win32
+		{0A599068-9BA5-4D40-8FA6-5D3514529B69}.Debug|ARM.ActiveCfg = Debug|Win32
+		{0A599068-9BA5-4D40-8FA6-5D3514529B69}.Debug|Win32.ActiveCfg = Debug|Win32
+		{0A599068-9BA5-4D40-8FA6-5D3514529B69}.Debug|Win32.Build.0 = Debug|Win32
+		{0A599068-9BA5-4D40-8FA6-5D3514529B69}.Debug|x64.ActiveCfg = Debug|Win32
+		{0A599068-9BA5-4D40-8FA6-5D3514529B69}.Release|ARM.ActiveCfg = Release|Win32
+		{0A599068-9BA5-4D40-8FA6-5D3514529B69}.Release|Win32.ActiveCfg = Release|Win32
+		{0A599068-9BA5-4D40-8FA6-5D3514529B69}.Release|Win32.Build.0 = Release|Win32
+		{0A599068-9BA5-4D40-8FA6-5D3514529B69}.Release|x64.ActiveCfg = Release|Win32
+		{13011BE8-74F9-4A90-B13C-EBC6AE37AA11}.Debug|ARM.ActiveCfg = Debug|Win32
+		{13011BE8-74F9-4A90-B13C-EBC6AE37AA11}.Debug|Win32.ActiveCfg = Debug|Win32
+		{13011BE8-74F9-4A90-B13C-EBC6AE37AA11}.Debug|Win32.Build.0 = Debug|Win32
+		{13011BE8-74F9-4A90-B13C-EBC6AE37AA11}.Debug|x64.ActiveCfg = Debug|Win32
+		{13011BE8-74F9-4A90-B13C-EBC6AE37AA11}.Release|ARM.ActiveCfg = Release|Win32
+		{13011BE8-74F9-4A90-B13C-EBC6AE37AA11}.Release|Win32.ActiveCfg = Release|Win32
+		{13011BE8-74F9-4A90-B13C-EBC6AE37AA11}.Release|Win32.Build.0 = Release|Win32
+		{13011BE8-74F9-4A90-B13C-EBC6AE37AA11}.Release|Win32.Deploy.0 = Release|Win32
+		{13011BE8-74F9-4A90-B13C-EBC6AE37AA11}.Release|x64.ActiveCfg = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,2 @@
+#include "PicoloReader\PicoloImageRecorder.h"
+
