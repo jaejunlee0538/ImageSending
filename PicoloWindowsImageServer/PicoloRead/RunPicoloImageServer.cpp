@@ -29,7 +29,9 @@ int main(int argc, char** argv)
 	MC::Initialize();
 
 	std::cerr << PicoloImageSender::getBoardsInfoString() << std::endl;
-
+	if (PicoloImageSender::getBoardCount() == 0){
+		return 0;
+	}
 	std::vector<PicoloImageSender> picolo(conns.size());
 	for (size_t i = 0; i < conns.size(); i++){
 		picolo[i].setServer(&server);

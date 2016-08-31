@@ -34,7 +34,7 @@ std::string PicoloImageReader::getBoardsInfoString(){
 		}
 	}
 	else{
-		oss << "Picolo boards aren't detected.\n";
+		oss << "No board detected.\n";
 	}
 	
 	return oss.str();
